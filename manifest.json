@@ -1,0 +1,17 @@
+{
+    "name": "ComEd Live",
+    "short_name": "ComEd Live",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#3b82f6",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjM2I4MmY2IiBkPSJNMjg4IDBMOTYgMzA0aDEyOGwtMzIgMjA4TDM4NCAyMDhIMjU2eiIvPjwvc3ZnPg==",
+            "sizes": "192x192 512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}
