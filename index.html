@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComEd Live Tracker - Dark Mode</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ComEd Live">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/color/512/lightning-bolt.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="description" content="Real-time electricity pricing tracker for ComEd customers">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        /* Changed body background to dark slate */
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        
+        /* Smooth Toggle Switch */
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+
+        /* Offline Banner */
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #ef4444;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            z-index: 1000;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        .offline-banner.show {
+            transform: translateY(0);
+        }
+
+        /* Install prompt */
+        .install-prompt {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            border: 2px solid #3b82f6;
+            border-radius: 16px;
+            padding: 12px 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
+        }
+        .install-prompt.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Chart flip animation */
+        .chart-container {
+            perspective: 1000px;
+            position: relative;
+        }
+        .chart-flipper {
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        .chart-flipper.flipped {
+            transform: rotateY(180deg);
+        }
+        .chart-face {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .chart-back {
+            transform: rotateY(180deg);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        /* Invisible touch area in top-right corner */
+        .flip-touch-area {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            z-index: 10;
+            transition: background 0.2s ease;
+        }
+        
+        /* Subtle hint on desktop hover only */
+        @media (hover: hover) {
+            .flip-touch-area:hover {
+                background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 70%);
+            }
+        }
+        
+        .flip-touch-area:active {
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.15), transparent 70%);
+        }
+        
+        /* Responsive chart heights */
+        .chart-height {
+            height: 320px; /* Default mobile */
+        }
+        
+        /* Desktop: taller, more zoomed */
+        @media (min-width: 768px) {
+            .chart-height {
+                height: 450px;
+            }
+        }
+        
+        /* Mobile landscape: wider, shorter for horizontal viewing */
+        @media (max-width: 767px) and (orientation: landscape) {
+            .chart-height {
+                height: 250px;
+            }
+            .chart-container {
+                margin-bottom: 1rem !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 pb-32">
+
+    <!-- Offline Banner -->
+    <div id="offline-banner" class="offline-banner">
+        <i class="fa-solid fa-wifi-slash"></i> Offline - Showing cached data
+    </div>
+
+    <!-- Install Prompt -->
+    <div id="install-prompt" class="install-prompt">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-download text-blue-400 text-xl"></i>
+            <div class="flex-1">
+                <div class="text-sm font-bold text-slate-100">Install ComEd Live</div>
+                <div class="text-xs text-slate-400">Access offline & get app experience</div>
+            </div>
+            <button onclick="installApp()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">
+                Install
+            </button>
+            <button onclick="dismissInstall()" class="text-slate-400 hover:text-slate-200 px-2">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+        <header class="flex justify-between items-end mb-6">
+            <div>
+                <h1 class="text-2xl font-black text-slate-100 tracking-tighter italic">COMED<span class="text-blue-500">LIVE</span></h1>
+                <div class="flex items-center gap-2">
+                    <div onclick="forceRefresh()" class="cursor-pointer text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 hover:text-blue-400 transition">
+                        <i class="fa-solid fa-rotate" id="refresh-icon"></i>
+                        <span id="last-sync">Syncing...</span>
+                    </div>
+                    <div id="connection-status" class="flex items-center gap-1">
+                        <div class="w-2 h-2 rounded-full bg-green-500" id="status-dot"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-end">
+                <label class="flex items-center cursor-pointer relative">
+                    <input type="checkbox" id="tax-toggle" class="sr-only" onchange="renderUI()">
+                    <div class="w-10 h-6 bg-slate-700 rounded-full shadow-inner transition-colors duration-300" id="toggle-bg"></div>
+                    <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow transition-transform duration-300" id="toggle-dot"></div>
+                </label>
+                <span class="text-[9px] font-bold text-slate-500 uppercase mt-1">Real Cost (+7.6¢)</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-slate-800/50 rounded-xl p-3 flex justify-between items-center border border-slate-700/50">
+                <span class="text-[9px] font-black uppercase text-slate-500">24h Low</span>
+                <span id="stat-low" class="text-sm font-black text-green-500">--.-¢</span>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-3 flex justify-between items-center border border-slate-700/50">
+                <span class="text-[9px] font-black uppercase text-slate-500">24h High</span>
+                <span id="stat-high" class="text-sm font-black text-slate-200">--.-¢</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div id="live-card" class="bg-slate-800 p-5 rounded-[2rem] shadow-lg border border-slate-700 transition-all duration-300">
+                <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Live Price (5m)</h3>
+                <div class="flex items-baseline gap-1">
+                    <span id="live-price" class="text-5xl font-black text-slate-100 tracking-tighter">--.-</span>
+                    <span class="text-sm text-slate-500 font-bold">¢</span>
+                </div>
+                <div id="live-rating" class="text-[9px] font-black uppercase mt-2 px-2 py-0.5 rounded-md inline-block bg-slate-700 text-slate-400">Loading</div>
+            </div>
+
+            <div class="bg-slate-800 p-5 rounded-[2rem] shadow-lg border border-slate-700">
+                <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Hour Avg</h3>
+                <div class="flex items-baseline gap-1">
+                    <span id="current-price" class="text-5xl font-black text-blue-500 tracking-tighter">--.-</span>
+                    <span class="text-sm text-slate-500 font-bold">¢</span>
+                </div>
+                <div id="price-rating" class="text-[9px] font-black uppercase mt-2 px-2 py-0.5 rounded-md inline-block bg-slate-700 text-slate-400">Loading</div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-[2.5rem] shadow-lg border border-slate-700 mb-6 chart-container">
+            <div class="chart-flipper" id="chart-flipper">
+                <!-- Front: 2 Hour Chart -->
+                <div class="chart-face">
+                    <div class="flex justify-between items-center mb-4 px-2">
+                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 2 Hours</span>
+                    </div>
+                    <!-- Invisible touch area in top-right corner -->
+                    <div class="flip-touch-area" onclick="flipChart()" title="Tap to switch views"></div>
+                    <div class="chart-height">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Back: 12 Hour Chart -->
+                <div class="chart-face chart-back">
+                    <div class="flex justify-between items-center mb-4 px-2">
+                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 12 Hours</span>
+                    </div>
+                    <!-- Invisible touch area in top-right corner -->
+                    <div class="flip-touch-area" onclick="flipChart()" title="Tap to switch views"></div>
+                    <div class="chart-height">
+                        <canvas id="priceChart12h"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-2">
+                <span id="data-age" class="text-[9px] font-bold text-slate-600"></span>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-[2rem] shadow-lg border border-slate-700 overflow-hidden mb-6">
+            <div class="px-6 py-4 bg-slate-900/30 border-b border-slate-700 flex justify-between">
+                <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Latest Intervals</span>
+            </div>
+            <table class="w-full text-left">
+                <tbody id="price-table-body" class="divide-y divide-slate-700/50"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_AVERAGE = 'https://hourlypricing.comed.com/api?type=currenthouraverage';
+        const API_5MIN = 'https://hourlypricing.comed.com/api?type=5minutefeed';
+        
+        const TAX_ADDER = 7.6; 
+        
+        let priceChart;
+        let priceChart12h;
+        let globalFeedData = [];
+        let globalAvgData = [];
+        let deferredPrompt;
+        let isOnline = navigator.onLine;
+        let lastFetchTime = null;
+        let isChartFlipped = false;
+
+        // ===== SERVICE WORKER & PWA SETUP =====
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New service worker available
+                                    if (confirm('New version available! Reload to update?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+
+        // Install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install prompt if not already installed
+            const installDismissed = localStorage.getItem('installDismissed');
+            if (!installDismissed) {
+                setTimeout(() => {
+                    document.getElementById('install-prompt').classList.add('show');
+                }, 3000);
+            }
+        });
+
+        async function installApp() {
+            if (!deferredPrompt) return;
+            
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('App installed');
+            }
+            
+            deferredPrompt = null;
+            document.getElementById('install-prompt').classList.remove('show');
+        }
+
+        function dismissInstall() {
+            document.getElementById('install-prompt').classList.remove('show');
+            localStorage.setItem('installDismissed', 'true');
+        }
+
+        // ===== OFFLINE SUPPORT =====
+        
+        // Monitor online/offline status
+        window.addEventListener('online', () => {
+            isOnline = true;
+            updateConnectionStatus();
+            document.getElementById('offline-banner').classList.remove('show');
+            // Fetch fresh data when back online
+            fetchAllData();
+        });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            updateConnectionStatus();
+            document.getElementById('offline-banner').classList.add('show');
+            // Load from localStorage if available
+            loadCachedData();
+        });
+
+        function updateConnectionStatus() {
+            const statusDot = document.getElementById('status-dot');
+            if (isOnline) {
+                statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
+            } else {
+                statusDot.className = 'w-2 h-2 rounded-full bg-red-500 animate-pulse';
+            }
+        }
+
+        // Save data to localStorage
+        function cacheData() {
+            const dataToCache = {
+                feedData: globalFeedData,
+                avgData: globalAvgData,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('comedData', JSON.stringify(dataToCache));
+            localStorage.setItem('taxToggle', document.getElementById('tax-toggle').checked);
+        }
+
+        // Load data from localStorage
+        function loadCachedData() {
+            const cached = localStorage.getItem('comedData');
+            if (cached) {
+                const data = JSON.parse(cached);
+                globalFeedData = data.feedData || [];
+                globalAvgData = data.avgData || [];
+                lastFetchTime = data.timestamp;
+                
+                if (globalFeedData.length || globalAvgData.length) {
+                    renderUI();
+                    updateDataAge();
+                }
+            }
+            
+            // Load tax toggle preference
+            const taxToggle = localStorage.getItem('taxToggle');
+            if (taxToggle !== null) {
+                document.getElementById('tax-toggle').checked = taxToggle === 'true';
+            }
+        }
+
+        // Show how old the cached data is
+        function updateDataAge() {
+            if (!lastFetchTime) return;
+            
+            const ageMinutes = Math.floor((Date.now() - lastFetchTime) / 60000);
+            const ageEl = document.getElementById('data-age');
+            
+            if (ageMinutes < 1) {
+                ageEl.textContent = 'Just now';
+                ageEl.className = 'text-[9px] font-bold text-green-500';
+            } else if (ageMinutes < 5) {
+                ageEl.textContent = `${ageMinutes}m ago`;
+                ageEl.className = 'text-[9px] font-bold text-blue-500';
+            } else if (ageMinutes < 30) {
+                ageEl.textContent = `${ageMinutes}m ago`;
+                ageEl.className = 'text-[9px] font-bold text-orange-500';
+            } else {
+                ageEl.textContent = `${ageMinutes}m ago`;
+                ageEl.className = 'text-[9px] font-bold text-red-500';
+            }
+        }
+
+        // ===== CORE HELPERS =====
+        
+        function getPriceRating(price) {
+            price = parseFloat(price);
+            const base = document.getElementById('tax-toggle').checked ? price - TAX_ADDER : price;
+            
+            // Adjusted classes for Dark Mode (backgrounds are more subtle/transparent or darker)
+            if (base <= 0) return { label: 'Free / Credit', class: 'text-purple-400 bg-purple-900/30', color: '#c084fc' };
+            if (base <= 3) return { label: 'Very Cheap', class: 'text-green-400 bg-green-900/30', color: '#4ade80' };
+            if (base <= 7) return { label: 'Cheap', class: 'text-emerald-400 bg-emerald-900/30', color: '#34d399' };
+            if (base <= 12) return { label: 'Moderate', class: 'text-blue-400 bg-blue-900/30', color: '#60a5fa' };
+            if (base <= 20) return { label: 'Expensive', class: 'text-orange-400 bg-orange-900/30', color: '#fb923c' };
+            return { label: 'Very High', class: 'text-red-400 bg-red-900/30', color: '#f87171' };
+        }
+
+        // ===== RENDER UI =====
+        
+        function renderUI() {
+            if (!globalFeedData.length) return;
+
+            const useTax = document.getElementById('tax-toggle').checked;
+            const adder = useTax ? TAX_ADDER : 0;
+
+            // Update Toggle Visuals
+            const dot = document.getElementById('toggle-dot');
+            const bg = document.getElementById('toggle-bg');
+            if(useTax) {
+                dot.style.transform = 'translateX(100%)';
+                bg.classList.remove('bg-slate-700');
+                bg.classList.add('bg-blue-600');
+            } else {
+                dot.style.transform = 'translateX(0)';
+                bg.classList.add('bg-slate-700');
+                bg.classList.remove('bg-blue-600');
+            }
+
+            // Save preference
+            localStorage.setItem('taxToggle', useTax);
+
+            // 1. Stats (Use full 24h data)
+            const allPrices = globalFeedData.map(d => parseFloat(d.price));
+            const min = Math.min(...allPrices);
+            const max = Math.max(...allPrices);
+            
+            // Low (Keep green or purple if negative)
+            const finalMin = (min + adder).toFixed(1);
+            const minRating = getPriceRating(finalMin);
+            const elLow = document.getElementById('stat-low');
+            elLow.innerText = finalMin + '¢';
+            elLow.className = `text-sm font-black ${minRating.class.split(' ')[0]}`; // Apply color
+
+            // High (NEW: Apply Dynamic Coloring)
+            const finalMax = (max + adder).toFixed(1);
+            const maxRating = getPriceRating(finalMax);
+            const elHigh = document.getElementById('stat-high');
+            elHigh.innerText = finalMax + '¢';
+            elHigh.className = `text-sm font-black ${maxRating.class.split(' ')[0]}`; // Apply color
+
+            // 2. Hour Avg
+            if (globalAvgData.length) {
+                const rawP = parseFloat(globalAvgData[0].price);
+                const finalP = (rawP + adder).toFixed(1);
+                const r = getPriceRating(finalP);
+                const el = document.getElementById('current-price');
+                el.innerText = finalP;
+                el.className = `text-5xl font-black tracking-tighter ${r.class.split(' ')[0]}`;
+                
+                const elRate = document.getElementById('price-rating');
+                elRate.innerText = r.label;
+                elRate.className = `text-[9px] font-black uppercase mt-2 px-2 py-0.5 rounded-md inline-block ${r.class}`;
+            }
+
+            // 3. Live Price
+            if (globalFeedData.length) {
+                const rawP = parseFloat(globalFeedData[0].price);
+                const finalP = (rawP + adder).toFixed(1);
+                const r = getPriceRating(finalP);
+                const el = document.getElementById('live-price');
+                el.innerText = finalP;
+                el.className = `text-5xl font-black tracking-tighter ${r.class.split(' ')[0]}`;
+
+                const elRate = document.getElementById('live-rating');
+                elRate.innerText = r.label;
+                elRate.className = `text-[9px] font-black uppercase mt-2 px-2 py-0.5 rounded-md inline-block ${r.class}`;
+            }
+
+            // 4. Update Table
+            const tableBody = document.getElementById('price-table-body');
+            tableBody.innerHTML = '';
+            globalFeedData.slice(0, 5).forEach(i => {
+                const t = new Date(parseInt(i.millisUTC)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                const finalP = (parseFloat(i.price) + adder).toFixed(1);
+                const rating = getPriceRating(finalP);
+                tableBody.innerHTML += `
+                    <tr class="group hover:bg-slate-700/50 transition">
+                        <td class="px-6 py-3 text-[11px] font-bold text-slate-500 tracking-tighter uppercase">${t}</td>
+                        <td class="px-6 py-3 text-right text-sm font-black tracking-tighter ${rating.class.split(' ')[0]}">${finalP}¢</td>
+                    </tr>`;
+            });
+
+            // 5. Update Charts
+            updateChart(globalFeedData, adder);
+            if (isChartFlipped) {
+                update12hChart(globalFeedData, adder);
+            }
+            
+            // 6. Update data age
+            updateDataAge();
+        }
+
+        function createSmartGradient(ctx, prices, adder) {
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const range = (max - min) || 1; 
+            const yMin = min - (range * 0.1); 
+            const yMax = max + (range * 0.1);
+            const totalRange = yMax - yMin;
+
+            const gradient = ctx.createLinearGradient(0, ctx.canvas.height, 0, 0);
+
+            // Updated Colors for Dark Mode Graph (brighter/neon)
+            const stops = [
+                { val: -5 + adder, color: '#c084fc' }, // purple-400
+                { val: 0 + adder, color: '#4ade80' },  // green-400
+                { val: 3.1 + adder, color: '#34d399' }, // emerald-400
+                { val: 7.1 + adder, color: '#60a5fa' }, // blue-400
+                { val: 12.1 + adder, color: '#fb923c' }, // orange-400
+                { val: 20 + adder, color: '#f87171' }   // red-400
+            ];
+
+            stops.forEach(s => {
+                let pos = (s.val - yMin) / totalRange;
+                pos = Math.max(0, Math.min(1, pos));
+                gradient.addColorStop(pos, s.color);
+            });
+            return gradient;
+        }
+
+        function updateChart(data, adder) {
+            const canvas = document.getElementById('priceChart');
+            const ctx = canvas.getContext('2d');
+            const chartData = [...data].slice(0, 24).reverse();
+            
+            const labels = chartData.map(i => {
+                const d = new Date(parseInt(i.millisUTC));
+                return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            });
+            
+            const prices = chartData.map(i => parseFloat(i.price) + adder);
+
+            const gradient = createSmartGradient(ctx, prices, adder);
+
+            if (priceChart) {
+                priceChart.data.labels = labels;
+                priceChart.data.datasets[0].data = prices;
+                priceChart.data.datasets[0].borderColor = gradient;
+                
+                priceChart.data.datasets[0].segment.borderColor = (context) => {
+                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
+                     return '#475569'; // Slate-600
+                };
+                priceChart.data.datasets[0].segment.pointBorderColor = (context) => {
+                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
+                     return '#475569';
+                };
+                
+                priceChart.update();
+            } else {
+                priceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: prices,
+                            borderColor: gradient,
+                            borderWidth: 4,
+                            pointRadius: 0,
+                            pointHitRadius: 10,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#0f172a', // Dark Background match
+                            pointBorderWidth: 3,
+                            pointBorderColor: '#475569',
+                            segment: {
+                                borderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569',
+                                pointBorderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569'
+                            },
+                            fill: {
+                                target: 'origin',
+                                above: 'rgba(30, 41, 59, 0.4)', // Slate-800 low opacity
+                                below: 'rgba(192, 132, 252, 0.05)'
+                            },
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b', // Slate-800
+                                titleColor: '#94a3b8',
+                                bodyColor: '#f1f5f9',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                titleFont: { size: 10 },
+                                bodyFont: { size: 14, weight: 'bold' },
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: { 
+                                    label: (c) => ` ${c.parsed.y.toFixed(1)}¢` 
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { 
+                                grid: { color: '#334155' }, // Slate-700
+                                ticks: { 
+                                    callback: v => v + '¢', 
+                                    font: {size: 11, weight: 'bold'}, 
+                                    color: '#64748b',
+                                    maxTicksLimit: window.innerWidth >= 768 ? 10 : 6
+                                } 
+                            },
+                            x: { 
+                                grid: { display: false }, 
+                                ticks: { 
+                                    maxTicksLimit: window.innerWidth >= 768 ? 12 : 6, 
+                                    maxRotation: 0, 
+                                    font: {size: 10}, 
+                                    color: '#64748b' 
+                                } 
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // New function to update 12h chart
+        function update12hChart(data, adder) {
+            const canvas = document.getElementById('priceChart12h');
+            const ctx = canvas.getContext('2d');
+            const chartData = [...data].slice(0, 144).reverse(); // 12 hours = 144 intervals (5min each)
+            
+            const labels = chartData.map(i => {
+                const d = new Date(parseInt(i.millisUTC));
+                return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            });
+            
+            const prices = chartData.map(i => parseFloat(i.price) + adder);
+
+            const gradient = createSmartGradient(ctx, prices, adder);
+
+            if (priceChart12h) {
+                priceChart12h.data.labels = labels;
+                priceChart12h.data.datasets[0].data = prices;
+                priceChart12h.data.datasets[0].borderColor = gradient;
+                
+                priceChart12h.data.datasets[0].segment.borderColor = (context) => {
+                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
+                     return '#475569';
+                };
+                priceChart12h.data.datasets[0].segment.pointBorderColor = (context) => {
+                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
+                     return '#475569';
+                };
+                
+                priceChart12h.update();
+            } else {
+                priceChart12h = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: prices,
+                            borderColor: gradient,
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            pointHitRadius: 10,
+                            pointHoverRadius: 5,
+                            pointBackgroundColor: '#0f172a',
+                            pointBorderWidth: 3,
+                            pointBorderColor: '#475569',
+                            segment: {
+                                borderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569',
+                                pointBorderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569'
+                            },
+                            fill: {
+                                target: 'origin',
+                                above: 'rgba(30, 41, 59, 0.4)',
+                                below: 'rgba(192, 132, 252, 0.05)'
+                            },
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#94a3b8',
+                                bodyColor: '#f1f5f9',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                titleFont: { size: 10 },
+                                bodyFont: { size: 14, weight: 'bold' },
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: { 
+                                    label: (c) => ` ${c.parsed.y.toFixed(1)}¢` 
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { 
+                                grid: { color: '#334155' },
+                                ticks: { 
+                                    callback: v => v + '¢', 
+                                    font: {size: 11, weight: 'bold'}, 
+                                    color: '#64748b',
+                                    maxTicksLimit: window.innerWidth >= 768 ? 10 : 6
+                                } 
+                            },
+                            x: { 
+                                grid: { display: false }, 
+                                ticks: { 
+                                    maxTicksLimit: window.innerWidth >= 768 ? 16 : 8, 
+                                    maxRotation: 0, 
+                                    font: {size: window.innerWidth >= 768 ? 10 : 9}, 
+                                    color: '#64748b' 
+                                } 
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Flip chart function
+        function flipChart() {
+            const flipper = document.getElementById('chart-flipper');
+            isChartFlipped = !isChartFlipped;
+            
+            if (isChartFlipped) {
+                flipper.classList.add('flipped');
+                // Update 12h chart when flipping to it
+                if (globalFeedData.length) {
+                    const useTax = document.getElementById('tax-toggle').checked;
+                    const adder = useTax ? TAX_ADDER : 0;
+                    setTimeout(() => update12hChart(globalFeedData, adder), 300);
+                }
+            } else {
+                flipper.classList.remove('flipped');
+            }
+            
+            // Save preference
+            localStorage.setItem('chartFlipped', isChartFlipped);
+        }
+
+        function forceRefresh() {
+            const icon = document.getElementById('refresh-icon');
+            icon.classList.add('fa-spin');
+            
+            document.getElementById('last-sync').innerText = "Syncing...";
+            document.getElementById('last-sync').classList.add('text-blue-500');
+            
+            fetchAllData().finally(() => {
+                icon.classList.remove('fa-spin');
+            });
+        }
+
+        async function fetchAllData() {
+            if (!isOnline) {
+                console.log('Offline - using cached data');
+                loadCachedData();
+                return;
+            }
+
+            try {
+                const ts = new Date().getTime();
+                const results = await Promise.allSettled([
+                    fetch(`${API_AVERAGE}&_=${ts}`).then(r => r.json()),
+                    fetch(`${API_5MIN}&_=${ts}`).then(r => r.json())
+                ]);
+
+                globalAvgData = results[0].status === 'fulfilled' ? results[0].value : [];
+                globalFeedData = results[1].status === 'fulfilled' ? results[1].value : [];
+
+                if (globalFeedData.length || globalAvgData.length) {
+                    lastFetchTime = Date.now();
+                    cacheData(); // Save to localStorage
+                    renderUI();
+                    
+                    const syncTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    document.getElementById('last-sync').innerText = syncTime;
+                    document.getElementById('last-sync').classList.remove('text-blue-500');
+                }
+
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                document.getElementById('last-sync').innerText = "Error - Retry";
+                document.getElementById('last-sync').classList.add('text-red-500');
+                
+                // Try to load cached data on error
+                loadCachedData();
+            }
+        }
+
+        // ===== INITIALIZATION =====
+        
+        // Check connection status on load
+        updateConnectionStatus();
+        
+        // Restore chart flip state
+        const savedFlipState = localStorage.getItem('chartFlipped');
+        if (savedFlipState === 'true') {
+            isChartFlipped = true;
+            document.getElementById('chart-flipper').classList.add('flipped');
+        }
+        
+        // Load cached data first for instant display
+        loadCachedData();
+        
+        // Then fetch fresh data
+        fetchAllData();
+        
+        // Update data age every minute
+        setInterval(updateDataAge, 60000);
+        
+        // Fetch fresh data every minute
+        setInterval(fetchAllData, 60000);
+    </script>
+</body>
+</html>
