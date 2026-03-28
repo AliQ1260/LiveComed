@@ -293,7 +293,32 @@
         let lastFetchTime = null;
         let isChartFlipped = false;
 
-        // ===== PWA SETUP =====
+        // ===== SERVICE WORKER & PWA SETUP =====
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) return;
+
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    if (confirm('New version available. Reload to update?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                    }
+                                }
+                            });
+                        });
+
+                        navigator.serviceWorker.addEventListener('controllerchange', () => {
+                            window.location.reload();
+                        });
+                    })
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
 
         // Install prompt
         window.addEventListener('beforeinstallprompt', (e) => {
