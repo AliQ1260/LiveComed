@@ -207,13 +207,8 @@
                 </div>
             </div>
 
-            <div class="flex flex-col items-end">
-                <label class="flex items-center cursor-pointer relative">
-                    <input type="checkbox" id="tax-toggle" class="sr-only" onchange="renderUI()">
-                    <div class="w-10 h-6 bg-slate-700 rounded-full shadow-inner transition-colors duration-300" id="toggle-bg"></div>
-                    <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow transition-transform duration-300" id="toggle-dot"></div>
-                </label>
-                <span class="text-[9px] font-bold text-slate-500 uppercase mt-1">Real Cost (+7.6¢)</span>
+            <div class="text-[9px] font-bold text-slate-500 uppercase text-right">
+                Live ComEd Pricing
             </div>
         </header>
 
@@ -289,8 +284,6 @@
         const API_AVERAGE = 'https://hourlypricing.comed.com/api?type=currenthouraverage';
         const API_5MIN = 'https://hourlypricing.comed.com/api?type=5minutefeed';
         
-        const TAX_ADDER = 7.6; 
-        
         let priceChart;
         let priceChart12h;
         let globalFeedData = [];
@@ -300,32 +293,7 @@
         let lastFetchTime = null;
         let isChartFlipped = false;
 
-        // ===== SERVICE WORKER & PWA SETUP =====
-        
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('SW registered:', registration);
-                        
-                        // Check for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New service worker available
-                                    if (confirm('New version available! Reload to update?')) {
-                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                        window.location.reload();
-                                    }
-                                }
-                            });
-                        });
-                    })
-                    .catch(err => console.log('SW registration failed:', err));
-            });
-        }
+        // ===== PWA SETUP =====
 
         // Install prompt
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -396,7 +364,6 @@
                 timestamp: Date.now()
             };
             localStorage.setItem('comedData', JSON.stringify(dataToCache));
-            localStorage.setItem('taxToggle', document.getElementById('tax-toggle').checked);
         }
 
         // Load data from localStorage
@@ -414,11 +381,6 @@
                 }
             }
             
-            // Load tax toggle preference
-            const taxToggle = localStorage.getItem('taxToggle');
-            if (taxToggle !== null) {
-                document.getElementById('tax-toggle').checked = taxToggle === 'true';
-            }
         }
 
         // Show how old the cached data is
@@ -447,7 +409,7 @@
         
         function getPriceRating(price) {
             price = parseFloat(price);
-            const base = document.getElementById('tax-toggle').checked ? price - TAX_ADDER : price;
+            const base = price;
             
             // Adjusted classes for Dark Mode (backgrounds are more subtle/transparent or darker)
             if (base <= 0) return { label: 'Free / Credit', class: 'text-purple-400 bg-purple-900/30', color: '#c084fc' };
@@ -469,39 +431,20 @@
         function renderUI() {
             if (!globalFeedData.length) return;
 
-            const useTax = document.getElementById('tax-toggle').checked;
-            const adder = useTax ? TAX_ADDER : 0;
-
-            // Update Toggle Visuals
-            const dot = document.getElementById('toggle-dot');
-            const bg = document.getElementById('toggle-bg');
-            if(useTax) {
-                dot.style.transform = 'translateX(100%)';
-                bg.classList.remove('bg-slate-700');
-                bg.classList.add('bg-blue-600');
-            } else {
-                dot.style.transform = 'translateX(0)';
-                bg.classList.add('bg-slate-700');
-                bg.classList.remove('bg-blue-600');
-            }
-
-            // Save preference
-            localStorage.setItem('taxToggle', useTax);
-
             // 1. Stats (Use full 24h data)
             const allPrices = globalFeedData.map(d => parseFloat(d.price));
             const min = Math.min(...allPrices);
             const max = Math.max(...allPrices);
             
             // Low (Keep green or purple if negative)
-            const finalMin = (min + adder).toFixed(1);
+            const finalMin = min.toFixed(1);
             const minRating = getPriceRating(finalMin);
             const elLow = document.getElementById('stat-low');
             elLow.innerText = finalMin + '¢';
             elLow.className = `text-sm font-black ${minRating.class.split(' ')[0]}`; // Apply color
 
             // High
-            const finalMax = (max + adder).toFixed(1);
+            const finalMax = max.toFixed(1);
             const maxRating = getPriceRating(finalMax);
             const elHigh = document.getElementById('stat-high');
             elHigh.innerText = finalMax + '¢';
@@ -510,7 +453,7 @@
             // 2. Hour Avg (With Pulsating Color)
             if (globalAvgData.length) {
                 const rawP = parseFloat(globalAvgData[0].price);
-                const finalP = (rawP + adder).toFixed(1);
+                const finalP = rawP.toFixed(1);
                 const r = getPriceRating(finalP);
                 const el = document.getElementById('current-price');
                 el.innerText = finalP;
@@ -529,7 +472,7 @@
             // 3. Live Price (With Pulsating Color)
             if (globalFeedData.length) {
                 const rawP = parseFloat(globalFeedData[0].price);
-                const finalP = (rawP + adder).toFixed(1);
+                const finalP = rawP.toFixed(1);
                 const r = getPriceRating(finalP);
                 const el = document.getElementById('live-price');
                 el.innerText = finalP;
@@ -550,7 +493,7 @@
             tableBody.innerHTML = '';
             globalFeedData.slice(0, 5).forEach(i => {
                 const t = new Date(parseInt(i.millisUTC)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                const finalP = (parseFloat(i.price) + adder).toFixed(1);
+                const finalP = parseFloat(i.price).toFixed(1);
                 const rating = getPriceRating(finalP);
                 tableBody.innerHTML += `
                     <tr class="group hover:bg-slate-700/50 transition">
@@ -560,16 +503,16 @@
             });
 
             // 5. Update Charts
-            updateChart(globalFeedData, adder);
+            updateChart(globalFeedData);
             if (isChartFlipped) {
-                update12hChart(globalFeedData, adder);
+                update12hChart(globalFeedData);
             }
             
             // 6. Update data age
             updateDataAge();
         }
 
-        function createSmartGradient(ctx, prices, adder) {
+        function createSmartGradient(ctx, prices) {
             const min = Math.min(...prices);
             const max = Math.max(...prices);
             const range = (max - min) || 1; 
@@ -581,12 +524,12 @@
 
             // Updated Colors for Dark Mode Graph (brighter/neon)
             const stops = [
-                { val: -5 + adder, color: '#c084fc' }, // purple-400
-                { val: 0 + adder, color: '#4ade80' },  // green-400
-                { val: 3.1 + adder, color: '#34d399' }, // emerald-400
-                { val: 7.1 + adder, color: '#60a5fa' }, // blue-400
-                { val: 12.1 + adder, color: '#fb923c' }, // orange-400
-                { val: 20 + adder, color: '#f87171' }   // red-400
+                { val: -5, color: '#c084fc' }, // purple-400
+                { val: 0, color: '#4ade80' },  // green-400
+                { val: 3.1, color: '#34d399' }, // emerald-400
+                { val: 7.1, color: '#60a5fa' }, // blue-400
+                { val: 12.1, color: '#fb923c' }, // orange-400
+                { val: 20, color: '#f87171' }   // red-400
             ];
 
             stops.forEach(s => {
@@ -597,7 +540,7 @@
             return gradient;
         }
 
-        function updateChart(data, adder) {
+        function updateChart(data) {
             const canvas = document.getElementById('priceChart');
             const ctx = canvas.getContext('2d');
             const chartData = [...data].slice(0, 24).reverse();
@@ -607,9 +550,9 @@
                 return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             });
             
-            const prices = chartData.map(i => parseFloat(i.price) + adder);
+            const prices = chartData.map(i => parseFloat(i.price));
 
-            const gradient = createSmartGradient(ctx, prices, adder);
+            const gradient = createSmartGradient(ctx, prices);
 
             if (priceChart) {
                 priceChart.data.labels = labels;
@@ -700,7 +643,7 @@
         }
 
         // New function to update 12h chart
-        function update12hChart(data, adder) {
+        function update12hChart(data) {
             const canvas = document.getElementById('priceChart12h');
             const ctx = canvas.getContext('2d');
             const chartData = [...data].slice(0, 144).reverse(); // 12 hours = 144 intervals (5min each)
@@ -710,9 +653,9 @@
                 return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             });
             
-            const prices = chartData.map(i => parseFloat(i.price) + adder);
+            const prices = chartData.map(i => parseFloat(i.price));
 
-            const gradient = createSmartGradient(ctx, prices, adder);
+            const gradient = createSmartGradient(ctx, prices);
 
             if (priceChart12h) {
                 priceChart12h.data.labels = labels;
@@ -811,9 +754,7 @@
                 flipper.classList.add('flipped');
                 // Update 12h chart when flipping to it
                 if (globalFeedData.length) {
-                    const useTax = document.getElementById('tax-toggle').checked;
-                    const adder = useTax ? TAX_ADDER : 0;
-                    setTimeout(() => update12hChart(globalFeedData, adder), 300);
+                    setTimeout(() => update12hChart(globalFeedData), 300);
                 }
             } else {
                 flipper.classList.remove('flipped');
