@@ -84,46 +84,59 @@
             100% { background-position: -200% 0; }
         }
 
-        /* Chart flip animation */
         .chart-container {
-            perspective: 1000px;
             position: relative;
         }
-        .chart-flipper {
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+
+        .range-toggle {
+            display: inline-flex;
+            gap: 0.25rem;
+            padding: 0.25rem;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(51, 65, 85, 0.9);
         }
-        .chart-flipper.flipped {
-            transform: rotateY(180deg);
+
+        .range-toggle button {
+            min-width: 3rem;
+            padding: 0.45rem 0.8rem;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            transition: all 0.2s ease;
         }
-        .chart-face {
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
+
+        .range-toggle button.active {
+            background: #3b82f6;
+            color: #f8fafc;
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.35);
         }
-        .chart-back {
-            transform: rotateY(180deg);
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+
+        .range-toggle button:not(.active):hover {
+            color: #e2e8f0;
+            background: rgba(51, 65, 85, 0.8);
         }
-        
-        /* Invisible touch area in top-right corner */
-        .flip-touch-area {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 80px;
-            height: 80px;
-            cursor: pointer;
-            z-index: 10;
-            transition: background 0.2s ease;
+
+        .interval-scroll {
+            max-height: 22rem;
+            overflow-y: auto;
         }
-        
-        .flip-touch-area:active {
-            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.15), transparent 70%);
+
+        .interval-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .interval-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .interval-scroll::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.45);
+            border-radius: 9999px;
+            border: 2px solid rgba(15, 23, 42, 0.85);
         }
         
         /* Responsive chart heights */
@@ -244,26 +257,16 @@
         </div>
 
         <div class="bg-slate-800 p-6 rounded-[2.5rem] shadow-lg border border-slate-700 mb-6 chart-container">
-            <div class="chart-flipper" id="chart-flipper">
-                <div class="chart-face">
-                    <div class="flex justify-between items-center mb-4 px-2">
-                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 2 Hours</span>
-                    </div>
-                    <div class="flip-touch-area" onclick="flipChart()" title="Tap to switch views"></div>
-                    <div class="chart-height">
-                        <canvas id="priceChart"></canvas>
-                    </div>
+            <div class="flex justify-between items-center gap-4 mb-4 px-2 flex-wrap">
+                <span id="chart-title" class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 2 Hours</span>
+                <div class="range-toggle" id="range-toggle">
+                    <button type="button" data-range="2h" onclick="setChartRange('2h')">2h</button>
+                    <button type="button" data-range="12h" onclick="setChartRange('12h')">12h</button>
+                    <button type="button" data-range="24h" onclick="setChartRange('24h')">24h</button>
                 </div>
-                
-                <div class="chart-face chart-back">
-                    <div class="flex justify-between items-center mb-4 px-2">
-                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 12 Hours</span>
-                    </div>
-                    <div class="flip-touch-area" onclick="flipChart()" title="Tap to switch views"></div>
-                    <div class="chart-height">
-                        <canvas id="priceChart12h"></canvas>
-                    </div>
-                </div>
+            </div>
+            <div class="chart-height">
+                <canvas id="priceChart"></canvas>
             </div>
             <div class="text-center mt-2">
                 <span id="data-age" class="text-[9px] font-bold text-slate-600"></span>
@@ -273,10 +276,13 @@
         <div class="bg-slate-800 rounded-[2rem] shadow-lg border border-slate-700 overflow-hidden mb-6">
             <div class="px-6 py-4 bg-slate-900/30 border-b border-slate-700 flex justify-between">
                 <span class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Latest Intervals</span>
+                <span class="text-[10px] font-bold text-slate-600 uppercase">Scroll</span>
             </div>
-            <table class="w-full text-left">
-                <tbody id="price-table-body" class="divide-y divide-slate-700/50"></tbody>
-            </table>
+            <div class="interval-scroll">
+                <table class="w-full text-left">
+                    <tbody id="price-table-body" class="divide-y divide-slate-700/50"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -284,14 +290,19 @@
         const API_AVERAGE = 'https://hourlypricing.comed.com/api?type=currenthouraverage';
         const API_5MIN = 'https://hourlypricing.comed.com/api?type=5minutefeed';
         
+        const CHART_RANGES = {
+            '2h': { label: 'Last 2 Hours', points: 24, ticks: { mobile: 6, desktop: 12 } },
+            '12h': { label: 'Last 12 Hours', points: 144, ticks: { mobile: 8, desktop: 16 } },
+            '24h': { label: 'Last 24 Hours', points: 288, ticks: { mobile: 8, desktop: 18 } }
+        };
+
         let priceChart;
-        let priceChart12h;
         let globalFeedData = [];
         let globalAvgData = [];
         let deferredPrompt;
         let isOnline = navigator.onLine;
         let lastFetchTime = null;
-        let isChartFlipped = false;
+        let activeChartRange = '2h';
 
         // ===== SERVICE WORKER & PWA SETUP =====
 
@@ -516,7 +527,7 @@
             // 4. Update Table
             const tableBody = document.getElementById('price-table-body');
             tableBody.innerHTML = '';
-            globalFeedData.slice(0, 5).forEach(i => {
+            globalFeedData.slice(0, 36).forEach(i => {
                 const t = new Date(parseInt(i.millisUTC)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
                 const finalP = parseFloat(i.price).toFixed(1);
                 const rating = getPriceRating(finalP);
@@ -529,9 +540,6 @@
 
             // 5. Update Charts
             updateChart(globalFeedData);
-            if (isChartFlipped) {
-                update12hChart(globalFeedData);
-            }
             
             // 6. Update data age
             updateDataAge();
@@ -565,10 +573,29 @@
             return gradient;
         }
 
+        function updateRangeToggle() {
+            document.getElementById('chart-title').innerText = CHART_RANGES[activeChartRange].label;
+            document.querySelectorAll('#range-toggle button').forEach((button) => {
+                button.classList.toggle('active', button.dataset.range === activeChartRange);
+            });
+        }
+
+        function setChartRange(range) {
+            if (!CHART_RANGES[range]) return;
+            activeChartRange = range;
+            localStorage.setItem('chartRange', range);
+            updateRangeToggle();
+
+            if (globalFeedData.length) {
+                updateChart(globalFeedData);
+            }
+        }
+
         function updateChart(data) {
             const canvas = document.getElementById('priceChart');
             const ctx = canvas.getContext('2d');
-            const chartData = [...data].slice(0, 24).reverse();
+            const rangeConfig = CHART_RANGES[activeChartRange];
+            const chartData = [...data].slice(0, rangeConfig.points).reverse();
             
             const labels = chartData.map(i => {
                 const d = new Date(parseInt(i.millisUTC));
@@ -583,6 +610,7 @@
                 priceChart.data.labels = labels;
                 priceChart.data.datasets[0].data = prices;
                 priceChart.data.datasets[0].borderColor = gradient;
+                priceChart.options.scales.x.ticks.maxTicksLimit = window.innerWidth >= 768 ? rangeConfig.ticks.desktop : rangeConfig.ticks.mobile;
                 
                 priceChart.data.datasets[0].segment.borderColor = (context) => {
                      if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
@@ -655,7 +683,7 @@
                             x: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    maxTicksLimit: window.innerWidth >= 768 ? 12 : 6, 
+                                    maxTicksLimit: window.innerWidth >= 768 ? rangeConfig.ticks.desktop : rangeConfig.ticks.mobile, 
                                     maxRotation: 0, 
                                     font: {size: 10}, 
                                     color: '#64748b' 
@@ -665,128 +693,6 @@
                     }
                 });
             }
-        }
-
-        // New function to update 12h chart
-        function update12hChart(data) {
-            const canvas = document.getElementById('priceChart12h');
-            const ctx = canvas.getContext('2d');
-            const chartData = [...data].slice(0, 144).reverse(); // 12 hours = 144 intervals (5min each)
-            
-            const labels = chartData.map(i => {
-                const d = new Date(parseInt(i.millisUTC));
-                return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            });
-            
-            const prices = chartData.map(i => parseFloat(i.price));
-
-            const gradient = createSmartGradient(ctx, prices);
-
-            if (priceChart12h) {
-                priceChart12h.data.labels = labels;
-                priceChart12h.data.datasets[0].data = prices;
-                priceChart12h.data.datasets[0].borderColor = gradient;
-                
-                priceChart12h.data.datasets[0].segment.borderColor = (context) => {
-                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
-                     return '#475569';
-                };
-                priceChart12h.data.datasets[0].segment.pointBorderColor = (context) => {
-                     if(context.p1.parsed) return getPriceRating(context.p1.parsed.y).color;
-                     return '#475569';
-                };
-                
-                priceChart12h.update();
-            } else {
-                priceChart12h = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [{
-                            data: prices,
-                            borderColor: gradient,
-                            borderWidth: 3,
-                            pointRadius: 0,
-                            pointHitRadius: 10,
-                            pointHoverRadius: 5,
-                            pointBackgroundColor: '#0f172a',
-                            pointBorderWidth: 3,
-                            pointBorderColor: '#475569',
-                            segment: {
-                                borderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569',
-                                pointBorderColor: (ctx) => ctx.p1.parsed ? getPriceRating(ctx.p1.parsed.y).color : '#475569'
-                            },
-                            fill: {
-                                target: 'origin',
-                                above: 'rgba(30, 41, 59, 0.4)',
-                                below: 'rgba(192, 132, 252, 0.05)'
-                            },
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { intersect: false, mode: 'index' },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#94a3b8',
-                                bodyColor: '#f1f5f9',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                titleFont: { size: 10 },
-                                bodyFont: { size: 14, weight: 'bold' },
-                                padding: 10,
-                                displayColors: false,
-                                callbacks: { 
-                                    label: (c) => ` ${c.parsed.y.toFixed(1)}¢` 
-                                }
-                            }
-                        },
-                        scales: {
-                            y: { 
-                                grid: { color: '#334155' },
-                                ticks: { 
-                                    callback: v => v + '¢', 
-                                    font: {size: 11, weight: 'bold'}, 
-                                    color: '#64748b',
-                                    maxTicksLimit: window.innerWidth >= 768 ? 10 : 6
-                                } 
-                            },
-                            x: { 
-                                grid: { display: false }, 
-                                ticks: { 
-                                    maxTicksLimit: window.innerWidth >= 768 ? 16 : 8, 
-                                    maxRotation: 0, 
-                                    font: {size: window.innerWidth >= 768 ? 10 : 9}, 
-                                    color: '#64748b' 
-                                } 
-                            }
-                        }
-                    }
-                });
-            }
-        }
-
-        // Flip chart function
-        function flipChart() {
-            const flipper = document.getElementById('chart-flipper');
-            isChartFlipped = !isChartFlipped;
-            
-            if (isChartFlipped) {
-                flipper.classList.add('flipped');
-                // Update 12h chart when flipping to it
-                if (globalFeedData.length) {
-                    setTimeout(() => update12hChart(globalFeedData), 300);
-                }
-            } else {
-                flipper.classList.remove('flipped');
-            }
-            
-            // Save preference
-            localStorage.setItem('chartFlipped', isChartFlipped);
         }
 
         function forceRefresh() {
@@ -843,12 +749,11 @@
         // Check connection status on load
         updateConnectionStatus();
         
-        // Restore chart flip state
-        const savedFlipState = localStorage.getItem('chartFlipped');
-        if (savedFlipState === 'true') {
-            isChartFlipped = true;
-            document.getElementById('chart-flipper').classList.add('flipped');
+        const savedChartRange = localStorage.getItem('chartRange');
+        if (savedChartRange && CHART_RANGES[savedChartRange]) {
+            activeChartRange = savedChartRange;
         }
+        updateRangeToggle();
         
         // Load cached data first for instant display
         loadCachedData();
