@@ -1,3 +1,5 @@
+// Local static server for the app (npm start). Production is served by Vercel.
+
 const express = require("express");
 const path = require("path");
 
