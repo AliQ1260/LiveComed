@@ -1,0 +1,22 @@
+// Local static server for the app (npm start). Production is served by Vercel.
+// Named dev-server.js on purpose: Vercel auto-deploys a root server.js/app.js/index.js as an
+// Express function, and on Vercel express.static() serves nothing, so every file (sw.js,
+// manifest.json) came back as index.html. The /api alert functions don't run here - use `vercel dev`.
+
+const express = require("express");
+const path = require("path");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Serve static files
+app.use(express.static(__dirname));
+
+// Fallback to index.html
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

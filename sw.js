@@ -1,7 +1,7 @@
 // Service worker: keeps the app shell and last price data available offline.
 // Bump VERSION on every deploy that changes cached files so old caches get cleared.
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `voltra-shell-${VERSION}`;
 const DATA_CACHE = `voltra-data-${VERSION}`;
 const SHELL_ASSETS = [
@@ -62,6 +62,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.origin === location.origin) {
+    // API calls (alerts config/subscribe) always go straight to the network
+    if (url.pathname.startsWith('/api/')) return;
+
     // Pages: network-first so new deploys reach users; other assets: cache-first
     if (request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
       event.respondWith(networkFirst(request, SHELL_CACHE, request));
@@ -84,6 +87,70 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(request, DATA_CACHE, keyUrl.toString()));
   }
 });
+
+// ===== PUSH NOTIFICATIONS =====
+
+// Price alert sent by /api/alert-check
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { body: event.data && event.data.text() };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Voltra', {
+      body: data.body || 'Electricity prices have changed.',
+      tag: data.tag || 'voltra-price', // Same tag: the all-clear replaces the red alert
+      renotify: true,                   // Still buzz when replacing
+      data: { url: data.url || './' }
+    })
+  );
+});
+
+// Tapping the notification opens Voltra (or focuses it if already open)
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './', self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => w.url.startsWith(self.location.origin));
+      if (open) return open.focus();
+      return self.clients.openWindow(target);
+    })
+  );
+});
+
+// The browser rotated this device's subscription - re-subscribe and tell the server, or alerts silently stop
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const config = await fetch('/api/config').then((r) => r.json());
+    if (!config.vapidPublicKey) return;
+
+    const subscription = await self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey)
+    });
+    // No threshold here (the worker can't read the page's storage) - the server copies it from the old subscription
+    await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        oldEndpoint: event.oldSubscription ? event.oldSubscription.endpoint : undefined
+      })
+    });
+  })());
+});
+
+// VAPID keys are base64url; the Push API wants raw bytes
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+}
 
 // ===== CACHE STRATEGIES =====
 

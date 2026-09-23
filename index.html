@@ -128,6 +128,160 @@
 
         .refresh-btn:active { transform: scale(0.96); }
 
+        /* Price Alerts Card */
+        .alerts-card {
+            padding: 1rem 1.25rem;
+            border-radius: 1.5rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        .alerts-row {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        /* Alert price row, lined up under the title (icon width + gap) */
+        .alerts-options {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 0.8rem;
+            padding-left: 3.15rem;
+        }
+
+        .alerts-label {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .alerts-input-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.6rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #64748b;
+            transition: border-color 0.2s ease;
+        }
+
+        .alerts-input-wrap:focus-within { border-color: #f87171; }
+
+        .alerts-input-wrap input {
+            width: 3.5rem;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #f8fafc;
+            font: inherit;
+            text-align: right;
+        }
+
+        .alerts-test {
+            margin-left: auto;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            padding: 0.4rem 0.75rem;
+            border-radius: 9999px;
+            border: 1px solid #334155;
+            transition: all 0.2s ease;
+        }
+
+        .alerts-test:hover:not(:disabled) { color: #f8fafc; border-color: #f87171; }
+        .alerts-test:disabled { opacity: 0.5; cursor: wait; }
+
+        @media (max-width: 400px) {
+            .alerts-options { padding-left: 0; }
+        }
+
+        .alerts-icon {
+            flex-shrink: 0;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 9999px;
+            display: grid;
+            place-items: center;
+            background: rgba(248, 113, 113, 0.12);
+            color: #f87171;
+            font-size: 0.9rem;
+        }
+
+        .alerts-title {
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #cbd5e1;
+        }
+
+        .alerts-status {
+            margin-top: 0.15rem;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: #64748b;
+        }
+
+        .alerts-status.is-on { color: #94a3b8; }
+        .alerts-status.is-warning { color: #fb923c; }
+
+        /* Toggle switch - red when on, to match the alert tier */
+        .alerts-switch {
+            position: relative;
+            flex-shrink: 0;
+            width: 2.75rem;
+            height: 1.6rem;
+        }
+
+        .alerts-switch input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            cursor: pointer;
+            z-index: 1;
+        }
+
+        .alerts-switch input:disabled { cursor: not-allowed; }
+
+        .alerts-slider {
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            background: #334155;
+            transition: background 0.2s ease;
+        }
+
+        .alerts-slider::before {
+            content: '';
+            position: absolute;
+            top: 0.2rem;
+            left: 0.2rem;
+            width: 1.2rem;
+            height: 1.2rem;
+            border-radius: 50%;
+            background: #f8fafc;
+            transition: transform 0.2s ease;
+        }
+
+        .alerts-switch input:checked + .alerts-slider { background: #ef4444; }
+        .alerts-switch input:checked + .alerts-slider::before { transform: translateX(1.15rem); }
+        .alerts-switch input:disabled + .alerts-slider { opacity: 0.45; }
+        .alerts-switch input:focus-visible + .alerts-slider { box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.35); }
+
         /* Disclaimer Footer */
         .app-footer {
             padding: 0.5rem 0.5rem 0;
@@ -529,6 +683,34 @@
             </div>
         </div>
 
+        <!-- Price Alerts -->
+        <div class="alerts-card mb-6">
+            <div class="alerts-row">
+                <div class="alerts-icon"><i class="fa-solid fa-bell"></i></div>
+                <div class="flex-1 min-w-0">
+                    <div class="alerts-title">Price Alerts</div>
+                    <div id="alerts-status" class="alerts-status">Checking…</div>
+                </div>
+                <label class="alerts-switch">
+                    <input type="checkbox" id="alerts-toggle" onchange="onAlertsToggle(this)" aria-label="Price alerts" disabled>
+                    <span class="alerts-slider"></span>
+                </label>
+            </div>
+
+            <!-- Alert price + test -->
+            <div class="alerts-options">
+                <label for="alerts-threshold" class="alerts-label">Alert me above</label>
+                <div class="alerts-input-wrap">
+                    <input type="number" id="alerts-threshold" inputmode="decimal" step="0.5" min="-10" max="100" value="20"
+                        onchange="onThresholdChange(this)" aria-describedby="alerts-status">
+                    <span>¢</span>
+                </div>
+                <button type="button" id="alerts-test" class="alerts-test" onclick="sendTestAlert()" hidden>
+                    <i class="fa-solid fa-paper-plane"></i> Send test
+                </button>
+            </div>
+        </div>
+
         <div class="bg-slate-800 p-6 rounded-[2.5rem] shadow-lg border border-slate-700 mb-6 chart-container">
             <div class="flex justify-between items-center mb-4 px-2">
                 <span id="chart-title" class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Last 2 Hours</span>
@@ -569,6 +751,7 @@
             </p>
             <p>
                 Privacy: Voltra doesn't collect any personal information. Your settings and the latest prices are stored only on this device.
+                If you turn on alerts, an anonymous push notification address for this device is stored so alerts can be sent. Turning alerts off deletes it.
             </p>
         </footer>
     </div>
@@ -1223,7 +1406,7 @@
                         y: {
                             grid: { color: '#334155' }, // Slate-700
                             ticks: {
-                                callback: v => v + '¢',
+                                callback: v => parseFloat(v.toFixed(2)) + '¢', // Trim float noise (5.200000000000001) on near-flat ranges
                                 font: { size: 11, weight: 'bold' },
                                 color: '#64748b',
                                 maxTicksLimit: window.innerWidth >= 768 ? 10 : 6
@@ -1335,6 +1518,239 @@
             setSyncStatus(syncTime, feedOk ? null : 'error');
         }
 
+        // ===== PRICE ALERTS =====
+
+        // The server (/api/alert-check) watches prices and sends the push; this section turns alerts
+        // on/off for this device and saves its alert price. Default matches the red tier in getPriceRating().
+        const ALERT_DEFAULT_THRESHOLD = 20;
+        const ALERT_MIN_THRESHOLD = -10;       // Keep in sync with MIN/MAX_THRESHOLD in api/_lib/alerts.mjs
+        const ALERT_MAX_THRESHOLD = 100;
+        const ALERT_RESYNC_MS = 24 * HOUR_MS;  // Re-save the subscription daily in case the server lost it
+
+        let alertsOn = false; // This device has a push subscription saved on the server
+
+        function alertsSupported() {
+            return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        }
+
+        function isIos() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+
+        function isInstalledApp() {
+            return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+        }
+
+        // Clamp and round to 0.1¢; anything that isn't a number falls back to the default
+        function normalizeThreshold(value) {
+            const n = parseFloat(value);
+            if (!Number.isFinite(n)) return ALERT_DEFAULT_THRESHOLD;
+            return Math.round(Math.min(ALERT_MAX_THRESHOLD, Math.max(ALERT_MIN_THRESHOLD, n)) * 10) / 10;
+        }
+
+        function getAlertThreshold() {
+            return normalizeThreshold(storageGet('alertThreshold') ?? ALERT_DEFAULT_THRESHOLD);
+        }
+
+        // 20 -> "20¢", 12.5 -> "12.5¢"
+        function formatThreshold(n) {
+            return Number.isInteger(n) ? `${n}¢` : `${n.toFixed(1)}¢`;
+        }
+
+        function alertsOnText() {
+            return `On. You'll get a notification when the live price goes above ${formatThreshold(getAlertThreshold())}, and again when it drops back under.`;
+        }
+
+        function alertsOffText() {
+            return `Get a notification when the live price goes above ${formatThreshold(getAlertThreshold())}.`;
+        }
+
+        // One place to set the card: switch, status line, and whether the test button shows
+        function setAlertsUI({ checked = false, enabled = true, text, tone = '' }) {
+            const toggle = document.getElementById('alerts-toggle');
+            const status = document.getElementById('alerts-status');
+            toggle.checked = checked;
+            toggle.disabled = !enabled;
+            status.textContent = text;
+            status.className = `alerts-status ${tone}`;
+            document.getElementById('alerts-test').hidden = !(alertsOn && enabled);
+        }
+
+        // serviceWorker.ready never settles if the worker failed to register, so give up after 10s
+        function serviceWorkerReady() {
+            return Promise.race([
+                navigator.serviceWorker.ready,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Service worker not ready')), 10000))
+            ]);
+        }
+
+        async function getPushSubscription() {
+            const reg = await serviceWorkerReady();
+            return reg.pushManager.getSubscription();
+        }
+
+        // VAPID keys are base64url; the Push API wants raw bytes
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        }
+
+        // POST JSON; throws with the server's own error message when there is one
+        async function postJson(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            return data;
+        }
+
+        // reset = start this device's alert state fresh (on enable / new alert price), so if the price
+        // is already above the new threshold the next check alerts - that's what makes testing easy
+        async function saveSubscription(subscription, { reset = false } = {}) {
+            await postJson('/api/subscribe', { subscription: subscription.toJSON(), threshold: getAlertThreshold(), reset });
+            storageSet('alertsSyncedAt', String(Date.now()));
+        }
+
+        // Show the right state on load
+        async function initAlerts() {
+            document.getElementById('alerts-threshold').value = getAlertThreshold();
+
+            if (!alertsSupported()) {
+                document.getElementById('alerts-threshold').disabled = true;
+                // iPhone only allows notifications for apps added to the Home Screen
+                if (isIos() && !isInstalledApp()) {
+                    setAlertsUI({ enabled: false, text: 'On iPhone, tap Share → Add to Home Screen, then open Voltra from your Home Screen to turn on alerts.', tone: 'is-warning' });
+                } else {
+                    setAlertsUI({ enabled: false, text: "This browser doesn't support notifications." });
+                }
+                return;
+            }
+
+            if (Notification.permission === 'denied') {
+                setAlertsUI({ enabled: false, text: 'Notifications are blocked for Voltra. Allow them in your browser or phone settings to use alerts.', tone: 'is-warning' });
+                return;
+            }
+
+            try {
+                const subscription = await getPushSubscription();
+                alertsOn = Boolean(subscription && Notification.permission === 'granted');
+                if (alertsOn) {
+                    setAlertsUI({ checked: true, text: alertsOnText(), tone: 'is-on' });
+                    // Quietly re-save once a day so a lost server row heals itself (no reset - won't re-alert)
+                    const lastSync = parseInt(storageGet('alertsSyncedAt')) || 0;
+                    if (Date.now() - lastSync > ALERT_RESYNC_MS) saveSubscription(subscription).catch(() => {});
+                } else {
+                    setAlertsUI({ text: alertsOffText() });
+                }
+            } catch (e) {
+                console.warn('Alert status check failed:', e);
+                setAlertsUI({ text: alertsOffText() });
+            }
+        }
+
+        function onAlertsToggle(toggle) {
+            if (toggle.checked) enableAlerts();
+            else disableAlerts();
+        }
+
+        async function enableAlerts() {
+            setAlertsUI({ checked: true, enabled: false, text: 'Turning on…' });
+
+            // Must be the first await: iPhone only shows the permission prompt straight from a tap
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                const blocked = permission === 'denied';
+                setAlertsUI({
+                    enabled: !blocked,
+                    text: blocked
+                        ? 'Notifications are blocked for Voltra. Allow them in your browser or phone settings to use alerts.'
+                        : 'Alerts need notification permission. Tap the switch to try again.',
+                    tone: 'is-warning'
+                });
+                return;
+            }
+
+            try {
+                const config = await fetch('/api/config', { cache: 'no-store' }).then(r => r.json());
+                if (!config.pushConfigured) throw new Error('Push not configured on the server');
+
+                const reg = await serviceWorkerReady();
+                const subscription = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey)
+                });
+
+                await saveSubscription(subscription, { reset: true });
+                alertsOn = true;
+                setAlertsUI({ checked: true, text: alertsOnText(), tone: 'is-on' });
+            } catch (e) {
+                console.error('Enable alerts failed:', e);
+                alertsOn = false;
+                setAlertsUI({ text: "Couldn't turn on alerts. Check your connection and try again.", tone: 'is-warning' });
+            }
+        }
+
+        async function disableAlerts() {
+            setAlertsUI({ enabled: false, text: 'Turning off…' });
+            try {
+                const subscription = await getPushSubscription();
+                if (subscription) {
+                    // Remove from the server first; if that fails, keep the subscription so the user can retry
+                    await postJson('/api/unsubscribe', { endpoint: subscription.endpoint });
+                    await subscription.unsubscribe();
+                }
+                alertsOn = false;
+                storageRemove('alertsSyncedAt');
+                setAlertsUI({ text: alertsOffText() });
+            } catch (e) {
+                console.error('Disable alerts failed:', e);
+                setAlertsUI({ checked: true, text: "Couldn't turn off alerts. Check your connection and try again.", tone: 'is-warning' });
+            }
+        }
+
+        // New alert price: save locally, and on the server if alerts are on
+        async function onThresholdChange(input) {
+            const threshold = normalizeThreshold(input.value);
+            input.value = threshold; // Show the clamped/rounded value
+            storageSet('alertThreshold', String(threshold));
+
+            if (!alertsOn) {
+                // Just refresh the hint - unless a warning (e.g. notifications blocked) is showing
+                if (!document.getElementById('alerts-toggle').disabled) setAlertsUI({ text: alertsOffText() });
+                return;
+            }
+
+            setAlertsUI({ checked: true, enabled: false, text: 'Saving…' });
+            try {
+                await saveSubscription(await getPushSubscription(), { reset: true });
+                setAlertsUI({ checked: true, text: alertsOnText(), tone: 'is-on' });
+            } catch (e) {
+                console.error('Save alert price failed:', e);
+                setAlertsUI({ checked: true, text: "Couldn't save your alert price. Check your connection and try again.", tone: 'is-warning' });
+            }
+        }
+
+        // "Send test": the server pushes a test notification to this device right away
+        async function sendTestAlert() {
+            const button = document.getElementById('alerts-test');
+            button.disabled = true;
+            try {
+                const subscription = await getPushSubscription();
+                if (!subscription) throw new Error('This device is not subscribed. Turn alerts off and on again.');
+                await postJson('/api/test-push', { endpoint: subscription.endpoint });
+                setAlertsUI({ checked: true, text: 'Test sent. It should arrive within a few seconds.', tone: 'is-on' });
+            } catch (e) {
+                console.error('Test alert failed:', e);
+                setAlertsUI({ checked: true, text: e.message || "Couldn't send a test.", tone: 'is-warning' });
+            } finally {
+                button.disabled = false;
+            }
+        }
+
         // ===== INITIALIZATION =====
 
         // Check connection status on load
@@ -1345,6 +1761,9 @@
         if (savedHours >= RANGE_MIN_H && savedHours <= RANGE_MAX_H) activeHours = savedHours;
         buildRangeStops();
         updateRangeToggle();
+
+        // Show whether price alerts are on for this device
+        initAlerts();
 
         // Load cached data first for instant display
         loadCachedData();
