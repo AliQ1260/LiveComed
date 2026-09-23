@@ -11,6 +11,8 @@ create table if not exists public.push_subscriptions (
   threshold numeric not null default 20,          -- alert when the live price goes above this (cents)
   alert_active boolean not null default false,    -- currently above threshold (high alert sent, no all-clear yet)
   below_count integer not null default 0,         -- intervals back under threshold, for the all-clear
+  zero_active boolean not null default false,     -- currently at/below 0¢ (zero alert sent for this dip)
+  zero_count integer not null default 0,          -- intervals back above 0¢, to re-arm the zero alert
   last_test_at timestamptz,                       -- rate limit for the "Send test" button
   user_agent text,
   created_at timestamptz not null default now(),

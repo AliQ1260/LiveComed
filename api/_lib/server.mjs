@@ -84,10 +84,11 @@ export function isValidEndpoint(endpoint) {
   return typeof endpoint === 'string' && endpoint.startsWith('https://') && endpoint.length <= 1000;
 }
 
-// Validate what the browser sent: { subscription: PushSubscription.toJSON(), threshold, reset }.
-// reset = true when alerts are turned on or the alert price changes: the device starts fresh, so if the
-// price is already above the new threshold the next check alerts (handy for testing). The daily resync
-// leaves reset off so it can't re-send an alert that's already showing.
+// Validate what the browser sent: { subscription: PushSubscription.toJSON(), threshold, reset, resetZero }.
+// reset = start the high alert fresh (alerts turned on, or the alert price changed), so if the price is
+// already above the new threshold the next check alerts - handy for testing.
+// resetZero = start the zero alert fresh too (only when alerts are turned on).
+// The daily resync sends neither, so it can't re-send an alert that's already showing.
 export function subscriptionRecordFromBody(body, userAgent) {
   const subscription = body?.subscription;
   const endpoint = subscription?.endpoint;
@@ -115,6 +116,10 @@ export function subscriptionRecordFromBody(body, userAgent) {
   if (body?.reset) {
     record.alert_active = false;
     record.below_count = 0;
+  }
+  if (body?.resetZero) {
+    record.zero_active = false;
+    record.zero_count = 0;
   }
   return record;
 }

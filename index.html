@@ -1521,7 +1521,8 @@
         // ===== PRICE ALERTS =====
 
         // The server (/api/alert-check) watches prices and sends the push; this section turns alerts
-        // on/off for this device and saves its alert price. Default matches the red tier in getPriceRating().
+        // on/off for this device and saves its alert price. One toggle = high alerts (above the alert price,
+        // default = the red tier in getPriceRating()) plus a zero alert at or below 0¢.
         const ALERT_DEFAULT_THRESHOLD = 20;
         const ALERT_MIN_THRESHOLD = -10;       // Keep in sync with MIN/MAX_THRESHOLD in api/_lib/alerts.mjs
         const ALERT_MAX_THRESHOLD = 100;
@@ -1558,11 +1559,11 @@
         }
 
         function alertsOnText() {
-            return `On. You'll get a notification when the live price goes above ${formatThreshold(getAlertThreshold())}, and again when it drops back under.`;
+            return `On. You'll get a notification when the live price goes above ${formatThreshold(getAlertThreshold())} (and when it drops back under), and whenever it's at or below 0¢.`;
         }
 
         function alertsOffText() {
-            return `Get a notification when the live price goes above ${formatThreshold(getAlertThreshold())}.`;
+            return `Get a notification when the live price goes above ${formatThreshold(getAlertThreshold())} or drops to 0¢ or below.`;
         }
 
         // One place to set the card: switch, status line, and whether the test button shows
@@ -1610,8 +1611,9 @@
 
         // reset = start this device's alert state fresh (on enable / new alert price), so if the price
         // is already above the new threshold the next check alerts - that's what makes testing easy
-        async function saveSubscription(subscription, { reset = false } = {}) {
-            await postJson('/api/subscribe', { subscription: subscription.toJSON(), threshold: getAlertThreshold(), reset });
+        // resetZero = also start the 0¢ alert fresh (only when alerts are turned on, not on a price change)
+        async function saveSubscription(subscription, { reset = false, resetZero = false } = {}) {
+            await postJson('/api/subscribe', { subscription: subscription.toJSON(), threshold: getAlertThreshold(), reset, resetZero });
             storageSet('alertsSyncedAt', String(Date.now()));
         }
 
@@ -1684,7 +1686,7 @@
                     applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey)
                 });
 
-                await saveSubscription(subscription, { reset: true });
+                await saveSubscription(subscription, { reset: true, resetZero: true });
                 alertsOn = true;
                 setAlertsUI({ checked: true, text: alertsOnText(), tone: 'is-on' });
             } catch (e) {

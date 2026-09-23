@@ -1,7 +1,7 @@
 // Service worker: keeps the app shell and last price data available offline.
 // Bump VERSION on every deploy that changes cached files so old caches get cleared.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = `voltra-shell-${VERSION}`;
 const DATA_CACHE = `voltra-data-${VERSION}`;
 const SHELL_ASSETS = [

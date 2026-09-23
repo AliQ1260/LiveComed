@@ -1,14 +1,19 @@
 # Price Alerts - Setup
 
-How it works: cron-job.org calls `/api/alert-check` every minute. When a new 5-minute price is out,
-that function reads it from ComEd and checks it against each device's own alert price (set in the app,
-default 20¢ = the red tier). A device gets "Prices are high" when the price goes above its alert price and
-"Prices are back down" after two prices in a row at or under it. Devices are stored in Supabase.
+How it works: cron-job.org calls `/api/alert-check` every 1-5 minutes. It reads every 5-minute price ComEd
+has posted since the last run and checks each device. One toggle in the app turns on both alerts:
+- **High:** "Prices are high" when the price goes above the device's alert price (set in the app, default
+  20¢ = the red tier), then "Prices are back down" after two prices in a row at or under it.
+- **Zero:** "Prices are at or below 0¢" whenever the price hits 0¢ or less - once per dip, re-arming after
+  the price has been above 0¢ for two prices.
+
+Devices are stored in Supabase.
 
 ## 1. Supabase (database)
 
 1. Create a free project at https://supabase.com.
 2. Open **SQL Editor**, paste all of `supabase/schema.sql`, and click **Run**.
+   *Already ran schema.sql before the zero alert was added?* Also run `supabase/migrations/002_zero_price_alerts.sql`.
 3. Open **Project Settings** and copy:
    - **Project URL** (`https://xxxx.supabase.co`, under Data API / API) -> `SUPABASE_URL`
    - A **secret** key (under API Keys: a `sb_secret_...` key, or the legacy **service_role** key) ->
